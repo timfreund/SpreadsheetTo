@@ -1,4 +1,5 @@
 import argparse
+import csv
 import mimetypes
 import os
 import openpyxl
@@ -46,6 +47,10 @@ class Spreadsheet():
         return self.worksheets[i]
 
 class Worksheet():
+    def __init__(self, name=None):
+        self.name = name
+        self._current_row = 1
+
     def __getitem__(self, key):
         raise RuntimeError("Not implemented")
 
@@ -53,13 +58,21 @@ class Worksheet():
         return self
 
     def __next__(self):
-        raise RuntimeError("Not implemented")
+        i = self._current_row
+        if self.get_row_count() < i:
+            self._current_row = 1
+            raise StopIteration
+        self._current_row = i + 1
+        return self.get_row(i)
 
     def get_column(self, idx):
         raise RuntimeError("Not implemented")
 
     def get_column_count(self):
         raise RuntimeError("Not implemented")
+
+    def get_name(self):
+        return self.name
 
     def get_row(self, idx):
         raise RuntimeError("Not implemented")
@@ -75,13 +88,15 @@ class XlsSpreadsheet(Spreadsheet):
         Spreadsheet.__init__(self, *args)
         self.workbook = xlrd.open_workbook(self.filename)
         for ws in self.workbook.sheets():
-            worksheet = XlsWorksheet(ws)
+            worksheet = XlsWorksheet(ws, ws.name)
             self.worksheets.append(worksheet)
             self.sheet_map[ws.name] = worksheet
 
 class XlsWorksheet(Worksheet):
-    def __init__(self, xlrd_worksheet):
+    def __init__(self, xlrd_worksheet, name=None):
+        Worksheet.__init__(self)
         self.worksheet = xlrd_worksheet
+        self.name = name
 
     def get_column(self, idx):
         return self.worksheet.col(idx)
@@ -110,13 +125,15 @@ class XlsxSpreadsheet(Spreadsheet):
         Spreadsheet.__init__(self, *args)
         self.workbook = openpyxl.reader.excel.load_workbook(self.filename)
         for ws in self.workbook.worksheets:
-            worksheet = XlsxWorksheet(ws)
+            worksheet = XlsxWorksheet(ws, ws.title)
             self.worksheets.append(worksheet)
             self.sheet_map[ws.title] = worksheet
 
 class XlsxWorksheet(Worksheet):
-    def __init__(self, openpyxl_worksheet):
+    def __init__(self, openpyxl_worksheet, name=None):
+        Worksheet.__init__(self)
         self.worksheet = openpyxl_worksheet
+        self.name = name
 
     def get_column_count(self):
         return self.worksheet.max_column
@@ -128,9 +145,8 @@ class XlsxWorksheet(Worksheet):
         if idx == 0:
             raise RuntimeError('Spreadsheet rows start at 1')
         rangeid = 'A%d:%s%d' % (idx,
-                                openpyxl.utils.get_column_letter(self.get_column_count() + 1),
+                                openpyxl.utils.get_column_letter(self.get_column_count()),
                                 idx)
-        print(rangeid)
         row = []
         for row_impl in self.worksheet.iter_rows(rangeid):
             for cell in row_impl:
@@ -142,30 +158,22 @@ def cli():
     parser.add_argument('--source', dest='source',
                         required=True,
                         help='the spreadsheet we will convert')
+    parser.add_argument('--destination', dest='destination',
+                        default=None,
+                        help='the directory where output will go (defaults to source directory)')
 
     args = parser.parse_args()
     workbook = open_spreadsheet(args.source)
+    dest_dir = args.destination
+    if not dest_dir:
+        dest_dir = os.path.dirname(args.source)
+    base_name = os.path.sep.join((dest_dir, os.path.basename(args.source).rsplit('.', 1)[0]))
 
-    import IPython
-    IPython.embed()
+    for sheet in workbook:
+        with open("%s-%s.csv" % (base_name, sheet.name), 'w') as output_file:
+            writer = csv.writer(output_file)
+            for row in sheet:
+                writer.writerow(row)
 
-    # xls_filename = "/home/tim/src/energy_information_administration/eia-923-mirror/data/utility/multisheet.xls"
-    # s = XlsSpreadsheet(xls_filename)
-    # for sheet in s:
-    #     print (sheet)
-
-    # wb = s
-    # import ipdb; ipdb.set_trace()
-    # print(s['Sheet2'])
-    # print(s[0])
-    # print(s[2])
-    # # raise RuntimeError("Unimplemented")
-
-    # xlsx_filename = "/home/tim/src/energy_information_administration/SpreadsheetTo/test_data/EIA923_Schedules_6_7_NU_SourceNDisposition_2013_Final.xlsx"
-    # wb = XlsxSpreadsheet(xlsx_filename)
-    # for sheet in wb:
-    #     print(sheet)
-    # print(wb[0])
-    # # print(wb[3])
-    # print(wb['File Layout'])
-    # print(wb['blah'])
+    # import IPython
+    # IPython.embed()
