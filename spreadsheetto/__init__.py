@@ -123,7 +123,7 @@ class XlsxSpreadsheet(Spreadsheet):
 
     def __init__(self, *args):
         Spreadsheet.__init__(self, *args)
-        self.workbook = openpyxl.reader.excel.load_workbook(self.filename)
+        self.workbook = openpyxl.load_workbook(self.filename, read_only=True)
         for ws in self.workbook.worksheets:
             worksheet = XlsxWorksheet(ws, ws.title)
             self.worksheets.append(worksheet)
@@ -134,6 +134,7 @@ class XlsxWorksheet(Worksheet):
         Worksheet.__init__(self)
         self.worksheet = openpyxl_worksheet
         self.name = name
+        self.rows = None
 
     def get_column_count(self):
         return self.worksheet.max_column
@@ -144,14 +145,19 @@ class XlsxWorksheet(Worksheet):
     def get_row(self, idx):
         if idx == 0:
             raise RuntimeError('Spreadsheet rows start at 1')
-        rangeid = 'A%d:%s%d' % (idx,
-                                openpyxl.utils.get_column_letter(self.get_column_count()),
-                                idx)
-        row = []
-        for row_impl in self.worksheet.iter_rows(rangeid):
+
+        if not self.rows:
+            self.preload_rows()
+
+        return self.rows[idx]
+
+    def preload_rows(self):
+        self.rows = [None,]
+        for row_impl in self.worksheet.rows:
+            row = []
             for cell in row_impl:
                 row.append(cell.value)
-        return row
+            self.rows.append(row)
 
 def cli():
     parser = argparse.ArgumentParser(description="Convert spreadsheets to other formats")
@@ -167,6 +173,8 @@ def cli():
     dest_dir = args.destination
     if not dest_dir:
         dest_dir = os.path.dirname(args.source)
+        if not len(dest_dir):
+            dest_dir = '.'
     base_name = os.path.sep.join((dest_dir, os.path.basename(args.source).rsplit('.', 1)[0]))
 
     for sheet in workbook:
