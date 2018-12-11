@@ -1,5 +1,6 @@
 import argparse
 import csv
+import io
 import mimetypes
 import os
 import openpyxl
@@ -60,7 +61,7 @@ class Worksheet():
         self._current_row = 1
 
     def __getitem__(self, key):
-        raise RuntimeError("Not implemented")
+        return self.get_row(key)
 
     def __iter__(self):
         return self
@@ -88,6 +89,12 @@ class Worksheet():
     def get_row_count(self):
         raise RuntimeError("Not implemented")
 
+    def to_csv(self):
+        csv_data = io.StringIO()
+        csv_writer = csv.writer(csv_data)
+        for row in self:
+            csv_writer.writerow(row)
+        return csv_data.getvalue()
 
 class XlsSpreadsheet(Spreadsheet):
     mimetype = 'application/vnd.ms-excel'
