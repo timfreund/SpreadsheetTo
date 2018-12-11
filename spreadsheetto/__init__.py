@@ -6,6 +6,14 @@ import openpyxl
 import sys
 import xlrd
 
+__all__ = [
+    'Spreadsheet',
+    'XlsSpreadsheet',
+    'XlsxSpreadsheet',
+    'cli',
+    'open_spreadsheet',
+    ]
+
 implementation_names = [
     'XlsSpreadsheet',
     'XlsxSpreadsheet',
